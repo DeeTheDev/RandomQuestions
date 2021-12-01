@@ -1,6 +1,7 @@
 let Question = require("../models/question");
 let Updates = require("../models/updates");
 let Comment = require("../models/comment");
+let Topic = require("../models/topic");
 module.exports = {
     async showQuestion(req, res) {
         try {
@@ -20,8 +21,7 @@ module.exports = {
                 populate: 'question author'
             })
                 .populate({
-                    path: 'topics',
-                    populate: 'title'
+                    path: 'topics'
             });
             res.render("questions/show", { question });
         } catch (error) {
@@ -29,7 +29,7 @@ module.exports = {
         }
     },
     async createQuestion(req, res) {
-        const { title, description } = req.body;
+        const { title, description, topics } = req.body;
         const { _id } = req.user;
         const infoFields = {
             title,
@@ -51,6 +51,10 @@ module.exports = {
                     action: "created a question",
                 };
                 const newUpdate = await Updates.create(updatesInfo);
+                const newTopics = await Topic.find({ 'title': { $in: topics } });
+                newTopics.forEach((topic) => {
+                    newQuestion.topics.push(topic);
+                })
                 newUpdate.save();
                 newQuestion.updates.push(newUpdate);
                 newQuestion.save();
@@ -58,7 +62,7 @@ module.exports = {
                     "success_msg",
                     "Your new question has been created, check it out below!"
                 );
-                res.redirect("/p/" + newQuestion._id + "/"); //redirect back to show page
+                res.redirect("/p/" + newQuestion._id + "/");
             } catch (error) {
                 res.status(500).send(error);
             }
@@ -66,7 +70,10 @@ module.exports = {
     },
     async showEditQuestion(req, res) {
         try {
-            const question = await Question.findById(req.params.id);
+            const question = await Question.findById(req.params.id)
+                .populate({
+                    path: 'topics'
+                });
             res.render("questions/edit", { question });
         } catch (error) {
             req.flash(
@@ -77,24 +84,27 @@ module.exports = {
         }
     },
     async updateQuestion(req, res) {
-        let question = await Question.findByIdAndUpdate(req.params.id,
-            req.body.question);
-        if (req.body.question) {
-            try{
-                await question.save();
-                req.flash(
-                    "success_msg",
-                    "Your question has been updated."
-                );
-                res.redirect("/p/" + question._id + "/"); //redirect back to show page
-            
-            }catch(err) {
-                req.flash(
-                    "success_msg",
-                    "Your question has been updated."
-                );
-               res.render("questions/show")
-            }
+        try {
+            const {topics} = req.body;
+            const {title, description} = req.body.question;
+            const findTopics = await Topic.find({"title": { $in: topics }});
+            const question = await Question.findOneAndUpdate(req.params.id, 
+                { "$set": { 
+                    "title": title,
+                    "description": description,
+                    "topics": findTopics } 
+                }
+            );
+            await question.save();
+            req.flash(
+                "success_msg",
+                "Your question has been updated."
+            );
+            res.redirect("/p/" + question._id + "/"); //redirect back to show page
+
+        } catch (err) {
+            console.log(err);
+            res.redirect("back");
         }
     },
     deleteQuestion(req, res, next) {

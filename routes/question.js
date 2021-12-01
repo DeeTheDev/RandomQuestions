@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router({ mergeParams: true });
+const Topic = require("../models/topic");
 let auth = require("../config/auth");
 const {
     showQuestion,
@@ -14,14 +15,32 @@ const {
     deleteQuestionComment
 } = require("../controllers/question");
 
+router.get("/search", async function (req, res, next) {
+    var q = req.query.q;
+    try {
+        const search_result = await Topic.find(
+            {
+                title: {
+                    $regex: new RegExp(q),
+                    $options: "i"
+                }
+            },
+            {
+                __v: 0
+            });
+        res.json(search_result);
+    } catch(err) {
+        console.log(err);
+    }
+});
 //NEW Post page
 router.get("/new", auth.userIsLogged, (req, res) => {
     res.render("questions/new", { user: req.user });
 });
-//SHOW project page
-router.get("/:id", showQuestion);
 //CREATE question
 router.post("/", auth.userIsLogged, createQuestion);
+//SHOW project page
+router.get("/:id", showQuestion);
 //EDIT question page
 router.get("/:id/edit", auth.userIsLogged, auth.checkIfOwner, showEditQuestion);
 //UPDATE question
